@@ -1,0 +1,6 @@
+2025-06-07 14:45:00.123456 - User: AnonymousUser - Path: /api/token/
+2025-06-07 14:45:05.789012 - User: alice - Path: /api/conversations/
+2025-06-07 14:45:10.456789 - User: alice - Path: /api/conversations/<conversation_id>/messages/
+2025-06-07 14:45:15.234567 - User: bob - Path: /api/messages/
+2025-06-07 14:45:20.890123 - User: AnonymousUser - Path: /api/conversations/
+2025-06-07 14:45:25.567890 - User: alice - Path: /api/token/refresh/
