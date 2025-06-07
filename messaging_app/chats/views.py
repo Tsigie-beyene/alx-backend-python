@@ -4,14 +4,16 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer
+from django.shortcuts import get_object_or_404
+from .permissions import IsParticipantOfConversation
 
 class ConversationViewSet(viewsets.ModelViewSet):
     """ViewSet for listing and creating conversations with filtering."""
     queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsParticipantOfConversation]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['participants']  # Allow filtering by participant user_id
+    filterset_fields = ['participants']
 
     def create(self, request, *args, **kwargs):
         """Create a new conversation and add the requesting user as a participant."""
@@ -30,13 +32,27 @@ class MessageViewSet(viewsets.ModelViewSet):
     """ViewSet for listing and sending messages with filtering."""
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsParticipantOfConversation]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['conversation']  # Allow filtering by conversation_id
+    filterset_fields = ['conversation']
 
     def create(self, request, *args, **kwargs):
-        """Create a new message with the requesting user as sender."""
-        serializer = self.get_serializer(data=request.data)
+        """Create a new message with the requesting user as sender, using conversation from URL."""
+        conversation_id = self.kwargs.get('conversation_conversation_id')
+        if not conversation_id:
+            return Response({"detail": "Conversation ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            conversation = Conversation.objects.get(conversation_id=conversation_id)
+            # Explicit permission check
+            if not conversation.participants.filter(user_id=request.user.user_id).exists():
+                return Response({"detail": "You are not a participant in this conversation."}, status=status.HTTP_403_FORBIDDEN)
+        except Conversation.DoesNotExist:
+            return Response({"detail": "Conversation does not exist."}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data.copy()
+        data['conversation'] = conversation.conversation_id
+        serializer = self.get_serializer(data=data)
         if serializer.is_valid():
             serializer.save(sender=self.request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -44,4 +60,8 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Return messages from conversations the user is part of."""
-        return Message.objects.filter(conversation__participants=self.request.user)
+        queryset = Message.objects.filter(conversation__participants=self.request.user)
+        conversation_id = self.kwargs.get('conversation_conversation_id') or self.request.query_params.get('conversation')
+        if conversation_id:
+            queryset = queryset.filter(conversation__conversation_id=conversation_id)
+        return queryset
