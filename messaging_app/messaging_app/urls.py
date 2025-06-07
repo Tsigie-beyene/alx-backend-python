@@ -18,9 +18,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework_simplejwt.views import TokenRefreshView
+from chats.auth import CustomTokenObtainPairView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('chats.urls')),  # Include chats app routes for conversations and messages
     path('api-auth/', include('rest_framework.urls')),  # Include DRF authentication endpoints
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # JWT refresh
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
