@@ -1,0 +1,12 @@
+<!-- messaging/templates/messaging/threads.html -->
+{% extends 'base.html' %}
+{% load message_tags %}
+
+{% block content %}
+<h2>Conversation with {{ other_user.username }}</h2>
+{% for thread in threads %}
+  <div class="thread">
+    {% render_message_thread thread %}
+  </div>
+{% endfor %}
+{% endblock %}
