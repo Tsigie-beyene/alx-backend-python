@@ -1,0 +1,18 @@
+<!-- messaging/templates/messaging/thread.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="thread">
+    {% with message=root_message %}
+        {% include 'messaging/_message.html' %}
+    {% endwith %}
+    
+    <div class="replies" style="margin-left: 20px;">
+        {% for reply in thread_messages %}
+            {% if reply.parent_message %}
+                {% include 'messaging/_message.html' with message=reply %}
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
