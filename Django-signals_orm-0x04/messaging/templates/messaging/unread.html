@@ -1,0 +1,35 @@
+<!-- messaging/templates/messaging/unread.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Your Unread Messages ({{ unread_count }})</h2>
+
+<div class="unread-messages">
+  {% for message in unread_messages %}
+  <div class="message" id="message-{{ message.message_id }}">
+    <h4>From: {{ message.sender.username }}</h4>
+    <small>{{ message.timestamp }}</small>
+    <p>{{ message.content }}</p>
+    <button onclick="markAsRead('{{ message.message_id }}')">Mark as Read</button>
+  </div>
+  {% empty %}
+  <p>You have no unread messages.</p>
+  {% endfor %}
+</div>
+
+<script>
+function markAsRead(messageId) {
+  fetch(`/messages/${messageId}/mark-read/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': '{{ csrf_token }}',
+      'Content-Type': 'application/json'
+    }
+  }).then(response => {
+    if (response.ok) {
+      document.getElementById(`message-${messageId}`).style.opacity = '0.5';
+    }
+  });
+}
+</script>
+{% endblock %}
