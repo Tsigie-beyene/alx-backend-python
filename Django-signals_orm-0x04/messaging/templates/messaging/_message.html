@@ -1,0 +1,13 @@
+<!-- messaging/templates/messaging/_message.html -->
+<div class="message">
+    <strong>{{ message.sender.username }}</strong>
+    <small>{{ message.timestamp }}</small>
+    <p>{{ message.content }}</p>
+    {% if message.replies.all %}
+        <div class="replies" style="margin-left: 20px;">
+            {% for reply in message.replies.all %}
+                {% include 'messaging/_message.html' with message=reply %}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
