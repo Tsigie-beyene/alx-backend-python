@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-messaging-app
+  namespace: default
+  labels:
+    app: django-messaging-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: django-messaging-app
+  template:
+    metadata:
+      labels:
+        app: django-messaging-app
+    spec:
+      containers:
+      - name: django-messaging-app
+        image: django-messaging-app:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DJANGO_ENV
+          value: "production"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-messaging-service
+  namespace: default
+spec:
+  selector:
+    app: django-messaging-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
