@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+# Function to deploy blue and green versions
+deploy_versions() {
+    echo "Deploying blue and green versions..."
+    kubectl apply -f blue_deployment.yaml
+    kubectl apply -f green_deployment.yaml
+    kubectl apply -f kubeservice.yaml
+    echo "Waiting for deployments to stabilize..."
+    sleep 10
+}
+
+# Function to verify deployments
+verify_deployments() {
+    echo "Verifying blue deployment..."
+    kubectl get pods -l app=django-messaging-app,version=blue
+    blue_count=$(kubectl get pods -l app=django-messaging-app,version=blue --no-headers | wc -l)
+    if [ "$blue_count" -eq 2 ]; then
+        echo "Blue deployment: $blue_count pods running."
+    else
+        echo "Error: Expected 2 blue pods, found $blue_count."
+        exit 1
+    fi
+
+    echo "Verifying green deployment..."
+    kubectl get pods -l app=django-messaging-app,version=green
+    green_count=$(kubectl get pods -l app=django-messaging-app,version=green --no-headers | wc -l)
+    if [ "$green_count" -eq 2 ]; then
+        echo "Green deployment: $green_count pods running."
+    else
+        echo "Error: Expected 2 green pods, found $green_count."
+        exit 1
+    fi
+}
+
+# Function to check logs for errors in green deployment
+check_green_logs() {
+    echo "Checking logs for green deployment..."
+    green_pods=$(kubectl get pods -l app=django-messaging-app,version=green --no-headers -o custom-columns=":metadata.name")
+    for pod in $green_pods; do
+        echo "Checking logs for pod: $pod"
+        if kubectl logs "$pod" | grep -i error; then
+            echo "Errors found in pod $pod logs."
+            exit 1
+        else
+            echo "No errors found in pod $pod logs."
+        fi
+    done
+}
+
+# Function to switch traffic to green deployment
+switch_to_green() {
+    echo "Switching traffic to green deployment..."
+    kubectl patch service django-messaging-service -p '{"spec":{"selector":{"app":"django-messaging-app","version":"green"}}}'
+    echo "Traffic switched to green deployment."
+}
+
+# Main execution
+echo "Implementing blue-green deployment for Django app..."
+
+# Deploy both versions and service
+deploy_versions
+
+# Verify deployments
+verify_deployments
+
+# Check green deployment logs for errors
+check_green_logs
+
+# Switch traffic to green if no errors
+switch_to_green
+
+echo "Blue-green deployment completed successfully."
