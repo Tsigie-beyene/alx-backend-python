@@ -1,0 +1,97 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to apply rolling update
+apply_rolling_update() {
+    echo "Applying rolling update to blue deployment..."
+    kubectl apply -f blue_deployment.yaml
+}
+
+# Function to monitor rollout status
+monitor_rollout() {
+    echo "Monitoring rollout status..."
+    kubectl rollout status deployment/django-messaging-app-blue
+    if [ $? -eq 0 ]; then
+        echo "Rolling update completed successfully."
+    else
+        echo "Rolling update failed."
+        exit 1
+    fi
+}
+
+# Function to test for downtime with curl
+test_downtime() {
+    echo "Testing for downtime with curl..."
+    # Start port-forward to access the service
+    kubectl port-forward service/django-messaging-service 8000:80 &
+    PORT_FORWARD_PID=$!
+    sleep 5 # Wait for port-forward to establish
+
+    # Run curl in a loop for 30 seconds to check for downtime
+    echo "Sending continuous requests to http://localhost:8000/api/..."
+    end_time=$((SECONDS + 30))
+    failed_requests=0
+    total_requests=0
+    while [ $SECONDS -lt $end_time ]; do
+        if curl -s -o /dev/null -w "%{http_code}" -H "Host: messaging-app.local" http://localhost:8000/api/ | grep -q "200"; then
+            echo -n "."
+        else
+            echo -n "F"
+            ((failed_requests++))
+        fi
+        ((total_requests++))
+        sleep 0.5
+    done
+    echo ""
+    echo "Completed $total_requests requests. Failed: $failed_requests"
+    if [ $failed_requests -eq 0 ]; then
+        echo "No downtime detected."
+    else
+        echo "Downtime detected: $failed_requests failed requests."
+        exit 1
+    fi
+
+    # Clean up port-forward process
+    kill $PORT_FORWARD_PID
+}
+
+# Function to verify pods
+verify_pods() {
+    echo "Verifying updated pods..."
+    kubectl get pods -l app=django-messaging-app,version=blue
+    pod_count=$(kubectl get pods -l app=django-messaging-app,version=blue --no-headers | wc -l)
+    if [ "$pod_count" -eq 2 ]; then
+        echo "Verified: $pod_count pods running with updated image."
+    else
+        echo "Error: Expected 2 pods, found $pod_count."
+        exit 1
+    fi
+}
+
+# Main execution
+echo "Performing rolling update for Django app..."
+
+# Check if curl is installed
+if ! command_exists curl; then
+    echo "Error: curl is required but not installed."
+    exit 1
+fi
+
+# Apply and monitor rolling update
+apply_rolling_update
+monitor_rollout
+
+# Test for downtime
+test_downtime
+
+# Verify pods
+verify_pods
+
+echo "Rolling update completed successfully with no downtime."
