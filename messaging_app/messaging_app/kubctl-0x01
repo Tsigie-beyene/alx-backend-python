@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to install wrk
+install_wrk() {
+    echo "Checking for wrk..."
+    if ! command_exists wrk; then
+        echo "Installing wrk..."
+        # Install wrk (assuming a Linux environment)
+        sudo apt-get update
+        sudo apt-get install -y build-essential libssl-dev git
+        git clone https://github.com/wg/wrk.git /tmp/wrk
+        cd /tmp/wrk
+        make
+        sudo mv wrk /usr/local/bin/
+        cd -
+        rm -rf /tmp/wrk
+        echo "wrk installed successfully."
+    else
+        echo "wrk is already installed."
+    fi
+}
+
+# Function to scale the deployment
+scale_deployment() {
+    echo "Scaling Django app to 3 replicas..."
+    kubectl scale deployment django-messaging-app --replicas=3
+    echo "Waiting for pods to be ready..."
+    sleep 10 # Give some time for pods to stabilize
+}
+
+# Function to verify pods
+verify_pods() {
+    echo "Verifying running pods..."
+    kubectl get pods -l app=django-messaging-app
+    pod_count=$(kubectl get pods -l app=django-messaging-app --no-headers | wc -l)
+    if [ "$pod_count" -eq 3 ]; then
+        echo "Successfully verified: $pod_count pods are running."
+    else
+        echo "Error: Expected 3 pods, but found $pod_count."
+        exit 1
+    fi
+}
+
+# Function to perform load testing
+perform_load_test() {
+    echo "Starting load testing with wrk..."
+    # Port-forward the service to localhost
+    kubectl port-forward service/django-messaging-service 8000:80 &
+    PORT_FORWARD_PID=$!
+    sleep 5 # Wait for port-forward to establish
+
+    # Run wrk for 30 seconds with 10 threads and 100 connections
+    wrk -t10 -c100 -d30s http://localhost:8000
+    echo "Load testing completed."
+
+    # Clean up port-forward process
+    kill $PORT_FORWARD_PID
+}
+
+# Function to monitor resource usage
+monitor_resources() {
+    echo "Monitoring resource usage..."
+    kubectl top pods -l app=django-messaging-app
+}
+
+# Main execution
+echo "Scaling and testing Django app on Kubernetes..."
+
+# Install dependencies
+install_wrk
+
+# Scale and verify
+scale_deployment
+verify_pods
+
+# Perform load testing
+perform_load_test
+
+# Monitor resources
+monitor_resources
+
+echo "Scaling and testing completed successfully."
