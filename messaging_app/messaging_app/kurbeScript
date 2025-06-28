@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to install Minikube
+install_minikube() {
+    echo "Checking for Minikube..."
+    if ! command_exists minikube; then
+        echo "Installing Minikube..."
+        # Download and install Minikube
+        curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        chmod +x minikube
+        sudo mv minikube /usr/local/bin/
+        echo "Minikube installed successfully."
+    else
+        echo "Minikube is already installed."
+    fi
+}
+
+# Function to install kubectl
+install_kubectl() {
+    echo "Checking for kubectl..."
+    if ! command_exists kubectl; then
+        echo "Installing kubectl..."
+        # Download and install kubectl
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        echo "kubectl installed successfully."
+    else
+        echo "kubectl is already installed."
+    fi
+}
+
+# Function to start Minikube cluster
+start_cluster() {
+    echo "Starting Minikube cluster..."
+    minikube start --driver=docker
+    echo "Minikube cluster started."
+}
+
+# Function to verify cluster status
+verify_cluster() {
+    echo "Verifying cluster status..."
+    kubectl cluster-info
+    if [ $? -eq 0 ]; then
+        echo "Cluster is running successfully."
+    else
+        echo "Failed to verify cluster status."
+        exit 1
+    fi
+}
+
+# Function to list pods
+list_pods() {
+    echo "Retrieving available pods..."
+    kubectl get pods --all-namespaces
+}
+
+# Main execution
+echo "Setting up local Kubernetes cluster..."
+
+# Check and install dependencies
+install_minikube
+install_kubectl
+
+# Start and verify cluster
+start_cluster
+verify_cluster
+
+# List available pods
+list_pods
+
+echo "Kubernetes setup completed successfully."
