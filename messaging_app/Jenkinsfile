@@ -1,0 +1,42 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_IMAGE = 'tsigie/messaging_app:latest'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: 'your-github-credentials-id', url: 'https://github.com/Tsigie-beyene/alx-backend-python.git'
+                sh 'git branch'
+            }
+        }
+        stage('Install dependencies') {
+            steps {
+                sh 'pip3 install -r messaging_app/requirements.txt'
+            }
+        }
+        stage('Run tests') {
+            steps {
+                sh 'pytest --junitxml=report.xml'
+            }
+            post {
+                always {
+                    junit 'report.xml'
+                }
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $DOCKER_IMAGE messaging_app/'
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    sh 'docker push $DOCKER_IMAGE'
+                }
+            }
+        }
+    }
+} 
