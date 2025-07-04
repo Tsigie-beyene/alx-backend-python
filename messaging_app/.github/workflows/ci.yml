@@ -1,3 +1,4 @@
+# GitHub Actions workflow for Django CI
 name: Django CI
 
 on: [push, pull_request]
