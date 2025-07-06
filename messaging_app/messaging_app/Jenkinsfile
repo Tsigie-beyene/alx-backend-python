@@ -1,41 +1,76 @@
 pipeline {
     agent any
     environment {
-        DOCKER_IMAGE = 'yourdockerhubusername/messaging_app:latest'
+        // Define Python version and Docker Hub credentials
+        PYTHON_VERSION = '3.8'
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        DOCKER_IMAGE = 'your_dockerhub_username/messaging-app'
     }
     stages {
         stage('Checkout') {
             steps {
-                git credentialsId: 'your-github-credentials-id', url: 'https://github.com/Tsigie-beyene/alx-backend-python.git'
+                // Pull code from GitHub repository
+                git branch: 'main', 
+                    credentialsId: 'github-credentials', 
+                    url: 'https://github.com/alx-backend-python.git'
             }
         }
-        stage('Install dependencies') {
+        stage('Install Dependencies') {
             steps {
-                sh 'pip install -r messaging_app/requirements.txt'
+                // Set up Python environment and install dependencies
+                sh '''
+                    python${PYTHON_VERSION} -m venv venv
+                    . venv/bin/activate
+                    pip3 install --upgrade pip
+                    pip3 install pytest pytest-html
+                    pip3 install -r messaging_app/requirements.txt
+                '''
             }
         }
-        stage('Run tests') {
+        stage('Run Tests') {
             steps {
-                sh 'pytest --junitxml=report.xml'
-            }
-            post {
-                always {
-                    junit 'report.xml'
-                }
+                // Run pytest and generate HTML report
+                sh '''
+                    . venv/bin/activate
+                    pytest messaging_app/tests/ --html=report.html --self-contained-html
+                '''
             }
         }
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE messaging_app/'
+                // Build Docker image for the Django app
+                sh '''
+                    docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} messaging_app/
+                    docker tag ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest
+                '''
             }
         }
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                    sh 'docker push $DOCKER_IMAGE'
-                }
+                // Log in to Docker Hub and push the image
+                sh '''
+                    echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                    docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                    docker push ${DOCKER_IMAGE}:latest
+                '''
             }
         }
     }
-} 
+    post {
+        always {
+            // Archive the test report
+            archiveArtifacts artifacts: 'report.html', allowEmptyArchive: true
+            // Clean up Docker images to save space
+            sh '''
+                docker rmi ${DOCKER_IMAGE}:${BUILD_NUMBER} || true
+                docker rmi ${DOCKER_IMAGE}:latest || true
+            '''
+        }
+        success {
+            echo 'Pipeline completed successfully! Docker image built and pushed.'
+        }
+        failure {
+            echo 'Pipeline failed. Check the logs for details.'
+        }
+    }
+}
